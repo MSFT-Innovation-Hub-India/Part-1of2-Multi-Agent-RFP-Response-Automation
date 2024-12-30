@@ -1,0 +1,10 @@
+[    
+
+{
+    "model": "gpt-4o",
+    "api_key": "",
+    "base_url": "https://<>.openai.azure.com/",
+    "api_type": "azure",
+    "api_version": "2024-05-01-preview"
+}
+]
