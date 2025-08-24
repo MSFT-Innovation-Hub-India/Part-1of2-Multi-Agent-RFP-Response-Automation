@@ -12,9 +12,7 @@ rfp_assistant_config = {
         {"type": "code_interpreter"},
     ],
     "tool_resources": {
-        "code_interpreter": {
-            "file_ids": ["assistant-OQhWYSEYHcHSmLuskzvrhzaQ"]
-        }
+        "code_interpreter": {"file_ids": ["assistant-BprDQ5E5xb7vduDioTeMoFwc"]}
     },
 }
 
@@ -23,9 +21,7 @@ doc_writer_assistant_config = {
         {"type": "code_interpreter"},
     ],
     "tool_resources": {
-        "code_interpreter": {
-            "file_ids": ["assistant-OQhWYSEYHcHSmLuskzvrhzaQ"]
-        }
+        "code_interpreter": {"file_ids": ["assistant-BprDQ5E5xb7vduDioTeMoFwc"]}
     },
 }
 
@@ -37,18 +33,21 @@ Once the document is ready, you will conclude the conversation by typing 'TERMIN
 
 
 group_chat_manager_system_prompt = """
-You represent the Pre Sales Project Engineer tasked with helping compile a Response to an RFP shared in the input.
-You will first ask for assistance from the ContosoEnggRfpAssistant to compile the RFP Response document.
-Next reach out to CorpComms-Assistant-Proxy to get Customer testimonials and references.
-You will ask the Document Writer to add the Customer testimonials information into the RFP Response document.
-Once the Document Writer has compiled the document, let the User_proxy know that the work is complete and do not entertain any further messages.
+- You represent the Pre Sales Project Engineer tasked with helping compile a Response to an RFP shared in the input. You will follow the workflow steps mentioned below, sequentially:
+    #Step1: You will first ask for assistance from the ContosoEnggRfpAssistant to compile the RFP Response document.
+    #Step2: Next reach out to CorpComms-Assistant-Proxy to get Customer testimonials and references.
+    #Step3: Finally, you will ask the Document Writer to compile the RFP Response document containing the Engineering part of the proposal and all the Customer case studies and all the Customer testimonials information provided by the CorpComms-Assistant-Proxy.
+- Once the Document Writer has compiled the document, let the User_proxy know that the work is complete and do not entertain any further messages.
+- Some rules you must follow:
+    - Do not move from one step to another until the current step is fully completed. They must be done in a sequence
+    - Ensure that all documents are saved in the correct format and location.
 """
 # # Configure logging
 # logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 # const.logging = logging
 app = Flask(__name__)
 # Define the URL of the external service
-external_service_url = 'http://127.0.0.1:36919/api/autogen'
+external_service_url = "http://127.0.0.1:36919/api/autogen"
 
 config_list_gpt4 = autogen.config_list_from_json(
     "OAI_CONFIG_LIST",
@@ -57,19 +56,45 @@ config_list_gpt4 = autogen.config_list_from_json(
     },
 )
 
-rfp_assistant_system_prompt = "You are an AI Assistant that helps the Presales team at Contoso Engineering respond to RFPs from potential Customers. The user will refer to an RFP Document that is available with you and your task is to create an RFP Response document. Use your domain knowledge to fill in the details required in the Response. Ensure that the criteria stipulated by the Customer in the 'Proposal Requirements' section as honored.  Ensure that every section has a narration of atleast 250 characters. When the details in any section merit the use of tables to provide the content, do so. Leave the 'Customer Testimonials' and Customer References section alone blank in your response. Return the content of the document in Markdown format. Reply TERMINATE in the end when everything is done."
+rfp_assistant_system_prompt = """
+You are an AI Assistant that helps the Presales team at Contoso Engineering respond to RFPs from potential Customers. 
+The user will refer to an RFP Document in .pdf format that is available with you and your task is to create an RFP Response document. 
+Use the code interpreter to extract text from the PDF and analyze its content. Employ whatever means to extract the content from the pdf document.
+**DO NOT ASK FOR CLARIFYING QUESTIONS. Just provide the response based on your knowledge of the subject to respond to the requirements in the RFP Document.**
+Use your domain knowledge to fill in the details required in the Response. 
+Ensure that the criteria stipulated by the Customer in the 'Proposal Requirements' section as honored.  
+Ensure that every section has a narration of atleast 250 characters. 
+When the details in any section merit the use of tables to provide the content, do so. 
+Leave the 'Customer Testimonials' and Customer References section alone blank in your response. 
+Return the content of the document in Markdown format. Reply TERMINATE in the end when everything is done."
+"""
 
-doc_writer_system_prompt = "Document Writer. Your job is to take the RFP Response prepared by ContosoEnggRfpAssistant, and add the Customer Testimonials prepared by CorpComms-Assistant-Proxy to it. Save the final content as a Microsoft Word Document .docx format in a shared folder."
-
+corp_comms_Assistant_Proxy_system_prompt = """
+- You are a proxy AI Assistant tasked with gathering Customer testimonials and references for the RFP Response document.
+- You will be provided with the contents of the RFP Document and you must reach out to the relevant stakeholders to collect the necessary testimonials and references.
+"""
+doc_writer_system_prompt = """You are an AI Assistant playing the role of a Document Writer.
+- You have access to the Code Interpreter tool. You must use this tool to create a Microsoft Office Word document (.docx) containing the following information.
+    - The **RFP Response prepared by ContosoEnggRfpAssistant that contains the Engineering part of the proposal**. **Ensure you include all the information provided to you. DO NOT leave anything out.**
+    - **All the Customer case studies** and **all the Customer testimonials information** provided by the CorpComms-Assistant-Proxy.
+- If the **RFP Response** is incomplete, return to the Group chat Manager.
+- Save the final content as a Microsoft Word Document .docx format in a shared folder."
+"""
 # Define user proxy agent
 llm_config = {"config_list": config_list_gpt4, "cache_seed": 45}
-agent_proxy = AgentProxy(name="CorpComms-Assistant-Proxy", llm_config=llm_config, instructions=rfp_assistant_system_prompt)
+
+
+agent_proxy = AgentProxy(
+    name="CorpComms-Assistant-Proxy",
+    llm_config=llm_config,
+    instructions=corp_comms_Assistant_Proxy_system_prompt,
+)
 
 doc_writer = GPTAssistantAgent(
     name="DocumentWriter",
     llm_config=llm_config,
     instructions=doc_writer_system_prompt,
-assistant_config=doc_writer_assistant_config
+    assistant_config=doc_writer_assistant_config,
 )
 
 rfp_assistant = GPTAssistantAgent(
@@ -90,28 +115,41 @@ user_proxy = autogen.UserProxyAgent(
         "use_docker": False,
     },
     is_termination_msg=lambda msg: "TERMINATE" in msg["content"],
-      # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
-    human_input_mode="NEVER"
+    # Please set use_docker=True if docker is available to run the generated code. Using docker is safer than running the generated code directly.
+    human_input_mode="NEVER",
 )
 
 
 def extract_content(response) -> str:
     # chat_history
-    extracted_content = ''
+    extracted_content = ""
     chat_history = response.chat_history
     for entry in chat_history:
-        if entry.get('role') == 'user' and entry.get('name') == 'CorpComms-Assistant-Proxy':
-            extracted_content = entry.get('content')
+        if (
+            entry.get("role") == "user"
+            and entry.get("name") == "CorpComms-Assistant-Proxy"
+        ):
+            extracted_content = entry.get("content")
             break
     return extracted_content
 
-@app.route('/api/autogen', methods=['POST'])
+
+@app.route("/api/autogen", methods=["POST"])
 def handle_autogen_request():
-    user_query = request.json.get('query')
+    user_query = request.json.get("query")
     # print(f"Received query: {user_query}")
     # Config.logging.info(f"Received query: {user_query}")
-    groupchat = autogen.GroupChat(agents=[user_proxy,rfp_assistant, agent_proxy,doc_writer], messages=[], max_round=5, speaker_selection_method="auto")
-    manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config,system_message=group_chat_manager_system_prompt)
+    groupchat = autogen.GroupChat(
+        agents=[user_proxy, rfp_assistant, agent_proxy, doc_writer],
+        messages=[],
+        max_round=5,
+        speaker_selection_method="auto",
+    )
+    manager = autogen.GroupChatManager(
+        groupchat=groupchat,
+        llm_config=llm_config,
+        system_message=group_chat_manager_system_prompt,
+    )
     response = user_proxy.initiate_chat(manager, message=user_query)
     # print(f"*******  Response **********: {response}")
     # You can process the response here and return it
@@ -128,6 +166,7 @@ class ServerThread(threading.Thread):
         self.port = 36920  # Example port
         app.logger.info(f"Service running on: http://127.0.0.1:{self.port}")
         self.app.run(port=self.port)
+
 
 if __name__ == "__main__":
     server_thread = ServerThread(app)
