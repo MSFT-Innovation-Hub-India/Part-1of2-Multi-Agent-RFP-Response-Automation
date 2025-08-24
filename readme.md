@@ -1,5 +1,5 @@
-## Multi Agent RFP Response automation Sample
-
+## [Part 1 of 2] Multi Agent RFP Response Automation
+Multi Agent System representing the Proposal Management System
 This is meant to be used in tandem with another project, Marketing and Communications Assistant, that is hosted in another GitHub Repo  - https://github.com/MSFT-Innovation-Hub-India/corp-comms-asst
 
 This is based on autogen, and heavily uses the Azure Open AI Assistants API
