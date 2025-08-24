@@ -70,6 +70,7 @@ class AgentProxy(ConversableAgent):
 
             # Forward the activity to the external bot service
             # run_response_message = requests.post("http://127.0.0.1:36919/api/autogen", json=input_message,headers=headers, timeout=100)
+            # use the above when running the demo of both multi agent systems in the same computer
             run_response_message = requests.post("http://192.168.0.136:36919/api/autogen", json=input_message,headers=headers, timeout=100)
             # print(f"External bot response: {run_response_message.json()}, \n status code: {run_response_message.status_code}")
 
