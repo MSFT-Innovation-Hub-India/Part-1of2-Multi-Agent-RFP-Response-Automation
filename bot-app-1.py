@@ -1,89 +1,27 @@
 """
-In bot-app.py, the RFP Document is picked up from the data folder and used. No Assistants API used to read that from Azure
+This bot-app-1.py uses the RFP Document stored in Azure. The Assistants API is used to fetch that document and process the user query 
 """
 
+
 import autogen
+
 from agent_proxy import AgentProxy
-from autogen import AssistantAgent
 from flask import Flask, request, jsonify
 import threading
 from autogen.agentchat.contrib.gpt_assistant_agent import GPTAssistantAgent
 
-# rfp_assistant_id = "asst_Cc0xciWLJxlnU11co3cAuP3H"
-# rfp_assistant_name = "ContosoEnggRfpAssistant"
-
-# rfp_assistant_config = {
-#     "tools": [
-#         {"type": "code_interpreter"},
-#     ],
-#     "tool_resources": {
-#         "code_interpreter": {"file_ids": ["assistant-BprDQ5E5xb7vduDioTeMoFwc"]}
-#     },
-# }
-
-# rfp_assistant_system_prompt = """
-# You are an AI Assistant that helps the Presales team at Contoso Engineering respond to RFPs from potential Customers. 
-# The user will refer to an RFP Document in .pdf format that is available with you and your task is to create an RFP Response document. 
-# Use the code interpreter to extract text from the PDF and analyze its content. Employ whatever means to extract the content from the pdf document.
-# **DO NOT ASK FOR CLARIFYING QUESTIONS. Just provide the response based on your knowledge of the subject to respond to the requirements in the RFP Document.**
-# Use your domain knowledge to fill in the details required in the Response. 
-# Ensure that the criteria stipulated by the Customer in the 'Proposal Requirements' section as honored.  
-# Ensure that every section has a narration of atleast 250 characters. 
-# When the details in any section merit the use of tables to provide the content, do so. 
-# Leave the 'Customer Testimonials' and Customer References section alone blank in your response. 
-# Return the content of the document in Markdown format. Reply TERMINATE in the end when everything is done."
-# """
-# config_list_gpt4 = autogen.config_list_from_json(
-#     "OAI_CONFIG_LIST",
-#     filter_dict={
-#         "model": ["gpt-4o"],
-#     },
-# )
-# rfp_assistant = GPTAssistantAgent(
-#     name=rfp_assistant_name,
-#     instructions=rfp_assistant_system_prompt,
-#     llm_config={
-#         "config_list": config_list_gpt4,
-#     },
-#     assistant_config=rfp_assistant_config,
-# )
-
-
+rfp_assistant_id = "asst_Cc0xciWLJxlnU11co3cAuP3H"
 rfp_assistant_name = "ContosoEnggRfpAssistant"
 
-# rfp_assistant_config = {
-#     "tools": [
-#         {"type": "code_interpreter"},
-#     ],
-#     "tool_resources": {
-#         "code_interpreter": {"file_ids": ["assistant-BprDQ5E5xb7vduDioTeMoFwc"]}
-#     },
-# }
-
-rfp_assistant_system_prompt = """
-You are an AI Assistant that helps the Presales team at Contoso Engineering respond to RFPs from potential Customers. 
-You will receive an RFP Document and your task is to create a Response document. 
-**DO NOT ASK FOR CLARIFYING QUESTIONS. Just provide the response based on your knowledge of the subject to respond to the requirements in the RFP Document.**
-Use your domain knowledge to fill in the details required in the Response. 
-Ensure that the criteria stipulated by the Customer in the 'Proposal Requirements' section as honored.  
-Ensure that every section has a narration of atleast 250 characters. 
-When the details in any section merit the use of tables to provide the content, do so. 
-Leave the 'Customer Testimonials' and Customer case studies section alone blank in your response. 
-Return the content of the document in Markdown format. Reply TERMINATE in the end when everything is done."
-"""
-config_list_gpt4 = autogen.config_list_from_json(
-    "OAI_CONFIG_LIST",
-    filter_dict={
-        "model": ["gpt-4o"],
+rfp_assistant_config = {
+    "tools": [
+        {"type": "code_interpreter"},
+    ],
+    "tool_resources": {
+        "code_interpreter": {"file_ids": ["assistant-BprDQ5E5xb7vduDioTeMoFwc"]}
     },
-)
-rfp_assistant = AssistantAgent(
-    name=rfp_assistant_name,
-    system_message=rfp_assistant_system_prompt,
-    llm_config={
-        "config_list": config_list_gpt4,
-    }
-)
+}
+
 doc_writer_assistant_config = {
     "tools": [
         {"type": "code_interpreter"},
@@ -117,9 +55,25 @@ app = Flask(__name__)
 # Define the URL of the external service
 external_service_url = "http://127.0.0.1:36919/api/autogen"
 
+config_list_gpt4 = autogen.config_list_from_json(
+    "OAI_CONFIG_LIST",
+    filter_dict={
+        "model": ["gpt-4o"],
+    },
+)
 
-
-
+rfp_assistant_system_prompt = """
+You are an AI Assistant that helps the Presales team at Contoso Engineering respond to RFPs from potential Customers. 
+The user will refer to an RFP Document in .pdf format that is available with you and your task is to create an RFP Response document. 
+Use the code interpreter to extract text from the PDF and analyze its content. Employ whatever means to extract the content from the pdf document.
+**DO NOT ASK FOR CLARIFYING QUESTIONS. Just provide the response based on your knowledge of the subject to respond to the requirements in the RFP Document.**
+Use your domain knowledge to fill in the details required in the Response. 
+Ensure that the criteria stipulated by the Customer in the 'Proposal Requirements' section as honored.  
+Ensure that every section has a narration of atleast 250 characters. 
+When the details in any section merit the use of tables to provide the content, do so. 
+Leave the 'Customer Testimonials' and Customer References section alone blank in your response. 
+Return the content of the document in Markdown format. Reply TERMINATE in the end when everything is done."
+"""
 
 corp_comms_Assistant_Proxy_system_prompt = """
 - You are a proxy AI Assistant tasked with gathering Customer testimonials and case studies for the RFP Response document.
@@ -152,7 +106,14 @@ doc_writer = GPTAssistantAgent(
     assistant_config=doc_writer_assistant_config,
 )
 
-
+rfp_assistant = GPTAssistantAgent(
+    name=rfp_assistant_name,
+    instructions=rfp_assistant_system_prompt,
+    llm_config={
+        "config_list": config_list_gpt4,
+    },
+    assistant_config=rfp_assistant_config,
+)
 
 user_proxy = autogen.UserProxyAgent(
     name="User_proxy",
@@ -185,20 +146,6 @@ def extract_content(response) -> str:
 @app.route("/api/autogen", methods=["POST"])
 def handle_autogen_request():
     user_query = request.json.get("query")
-    rfp_content =  ""
-    # Read RFP Document content
-    try:
-        with open("data/RFP-Document.txt", "r", encoding="utf-8") as file:
-            rfp_content = file.read()
-        print(f"RFP Document loaded successfully. Content length: {len(rfp_content)} characters")
-    except FileNotFoundError:
-        print("RFP Document not found at data/RFP-Document.txt")
-        rfp_content = ""
-    except Exception as e:
-        print(f"Error reading RFP Document: {e}")
-        rfp_content = ""
-
-    final_user_query= "The RFP Document below:\n" + rfp_content
     # print(f"Received query: {user_query}")
     # Config.logging.info(f"Received query: {user_query}")
     groupchat = autogen.GroupChat(
@@ -212,7 +159,7 @@ def handle_autogen_request():
         llm_config=llm_config,
         system_message=group_chat_manager_system_prompt,
     )
-    response = user_proxy.initiate_chat(manager, message=final_user_query)
+    response = user_proxy.initiate_chat(manager, message=user_query)
     # print(f"*******  Response **********: {response}")
     # You can process the response here and return it
     return jsonify({"response": extract_content(response)})
